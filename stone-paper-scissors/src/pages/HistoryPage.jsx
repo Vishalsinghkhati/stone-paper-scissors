@@ -1,22 +1,46 @@
-import { useEffect, useState } from "react";
+import { useReducer, useEffect } from "react";
 import axios from "axios";
 import { Trophy, RefreshCw } from "lucide-react";
 
+// ─── State shape ─────────────────────────────────────────────────────────────
+const initialState = {
+  games: [],
+  loading: true,
+  error: null,
+};
+
+// ─── Reducer ─────────────────────────────────────────────────────────────────
+function historyReducer(state, action) {
+  switch (action.type) {
+    case "FETCH_START":
+      return { ...state, loading: true, error: null };
+
+    case "FETCH_SUCCESS":
+      return { games: action.payload, loading: false, error: null };
+
+    case "FETCH_ERROR":
+      return { ...state, loading: false, error: action.payload };
+
+    default:
+      return state;
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function HistoryPage() {
-  const [games, setGames] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [state, dispatch] = useReducer(historyReducer, initialState);
+  const { games, loading, error } = state;
 
   const fetchGames = async () => {
-    setLoading(true);
-    setError(null);
+    dispatch({ type: "FETCH_START" });
     try {
       const res = await axios.get("https://sps-backend-cmzm.onrender.com/api/games");
-      setGames(res.data);
-    } catch (err) {
-      setError("Could not load history. Is your backend running?");
-    } finally {
-      setLoading(false);
+      dispatch({ type: "FETCH_SUCCESS", payload: res.data });
+    } catch {
+      dispatch({
+        type: "FETCH_ERROR",
+        payload: "Could not load history. Is your backend running?",
+      });
     }
   };
 
@@ -32,7 +56,6 @@ export default function HistoryPage() {
         <h1 className="flex items-center gap-2 text-lg sm:text-2xl font-bold">
           <Trophy className="text-yellow-400" /> All Game History
         </h1>
-
         <button
           onClick={fetchGames}
           className="flex items-center gap-2 text-xs sm:text-sm border border-gray-600 px-3 py-1.5 rounded hover:border-gray-400 transition"
@@ -41,41 +64,33 @@ export default function HistoryPage() {
         </button>
       </div>
 
-      {/* STATES */}
+      {/* STATUS */}
       {loading && <p className="text-gray-400">Loading...</p>}
       {error && <p className="text-red-400">{error}</p>}
       {!loading && !error && games.length === 0 && (
         <p className="text-gray-500">No games saved yet. Play one!</p>
       )}
 
-      {/* MOBILE VIEW (CARDS) */}
+      {/* MOBILE: CARDS */}
       <div className="sm:hidden space-y-4">
         {!loading &&
           !error &&
-          [...games].reverse().map((g, i) => (
+          [...games].map((g, i) => (
             <div
-              key={g._id || i}
+              key={g.id || i}
               className="bg-[#0b0f2a] p-4 rounded-xl border border-white/5"
             >
               <div className="flex justify-between text-xs text-gray-500 mb-2">
                 <span>Game #{games.length - i}</span>
                 <span>{g.score}</span>
               </div>
-
               <div className="flex justify-between mb-2">
                 <span className="text-red-400 font-medium">{g.player1}</span>
                 <span className="text-blue-400 font-medium">{g.player2}</span>
               </div>
-
               <div className="text-sm">
                 Winner:{" "}
-                <span
-                  className={
-                    g.winner === "Tie"
-                      ? "text-gray-400"
-                      : "text-yellow-400 font-semibold"
-                  }
-                >
+                <span className={g.winner === "Tie" ? "text-gray-400" : "text-yellow-400 font-semibold"}>
                   {g.winner === "Tie" ? "Draw" : `🏆 ${g.winner}`}
                 </span>
               </div>
@@ -83,7 +98,7 @@ export default function HistoryPage() {
           ))}
       </div>
 
-      {/* DESKTOP VIEW (TABLE) */}
+      {/* DESKTOP: TABLE */}
       <div className="hidden sm:block">
         {!loading && !error && games.length > 0 && (
           <table className="w-full text-sm">
@@ -97,31 +112,17 @@ export default function HistoryPage() {
               </tr>
             </thead>
             <tbody>
-              {[...games].reverse().map((g, i) => (
+              {[...games].map((g, i) => (
                 <tr
-                  key={g._id || i}
+                  key={g.id || i}
                   className="border-b border-gray-800 hover:bg-white/5 transition"
                 >
-                  <td className="py-3 text-gray-500">
-                    {games.length - i}
-                  </td>
-                  <td className="py-3 text-red-400 font-medium">
-                    {g.player1}
-                  </td>
-                  <td className="py-3 text-blue-400 font-medium">
-                    {g.player2}
-                  </td>
+                  <td className="py-3 text-gray-500">{games.length - i}</td>
+                  <td className="py-3 text-red-400 font-medium">{g.player1}</td>
+                  <td className="py-3 text-blue-400 font-medium">{g.player2}</td>
                   <td className="py-3">{g.score}</td>
-                  <td
-                    className={`py-3 font-semibold ${
-                      g.winner === "Tie"
-                        ? "text-gray-400"
-                        : "text-yellow-400"
-                    }`}
-                  >
-                    {g.winner === "Tie"
-                      ? "Draw"
-                      : `🏆 ${g.winner}`}
+                  <td className={`py-3 font-semibold ${g.winner === "Tie" ? "text-gray-400" : "text-yellow-400"}`}>
+                    {g.winner === "Tie" ? "Draw" : `🏆 ${g.winner}`}
                   </td>
                 </tr>
               ))}

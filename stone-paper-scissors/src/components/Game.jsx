@@ -1,105 +1,120 @@
-import { useState, useEffect } from "react";
+import { useReducer, useEffect } from "react";
 import axios from "axios";
 import { Lock, Trophy } from "lucide-react";
 
+// ─── State shape ─────────────────────────────────────────────────────────────
+const initialState = {
+  round: 1,
+  p1Choice: null,
+  p2Choice: null,
+  p1Locked: false,
+  p2Locked: false,
+  score1: 0,
+  score2: 0,
+  roundWinner: null,
+  history: [],
+};
+
+// ─── Reducer ─────────────────────────────────────────────────────────────────
+function gameReducer(state, action) {
+  switch (action.type) {
+    case "SET_P1_CHOICE":
+      return { ...state, p1Choice: action.payload };
+
+    case "SET_P2_CHOICE":
+      return { ...state, p2Choice: action.payload };
+
+    case "LOCK_P1":
+      return { ...state, p1Locked: true };
+
+    case "LOCK_P2":
+      return { ...state, p2Locked: true };
+
+    case "RESOLVE_ROUND": {
+      const { winner, newScore1, newScore2 } = action.payload;
+      return {
+        ...state,
+        score1: newScore1,
+        score2: newScore2,
+        roundWinner: winner,
+        history: [
+          ...state.history,
+          {
+            round: state.round,
+            p1Choice: state.p1Choice,
+            p2Choice: state.p2Choice,
+            winner,
+          },
+        ],
+      };
+    }
+
+    case "NEXT_ROUND":
+      return {
+        ...state,
+        round: state.round + 1,
+        p1Choice: null,
+        p2Choice: null,
+        p1Locked: false,
+        p2Locked: false,
+        roundWinner: null,
+      };
+
+    case "RESTART":
+      return initialState;
+
+    default:
+      return state;
+  }
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function Game({ player1, player2 }) {
-  const [round, setRound] = useState(1);
-
-  const [p1Choice, setP1Choice] = useState(null);
-  const [p2Choice, setP2Choice] = useState(null);
-
-  const [p1Locked, setP1Locked] = useState(false);
-  const [p2Locked, setP2Locked] = useState(false);
-
-  const [score1, setScore1] = useState(0);
-  const [score2, setScore2] = useState(0);
-
-  const [roundWinner, setRoundWinner] = useState(null);
-  const [history, setHistory] = useState([]);
+  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const { round, p1Choice, p2Choice, p1Locked, p2Locked,
+          score1, score2, roundWinner, history } = state;
 
   useEffect(() => {
     if (p1Locked && p2Locked) {
-      setTimeout(resolveRound, 700);
+      const timer = setTimeout(() => resolveRound(), 700);
+      return () => clearTimeout(timer);
     }
   }, [p1Locked, p2Locked]);
 
   const getWinner = (p1, p2) => {
     if (p1 === p2) return "Tie";
-
-    if (
-      (p1 === "stone" && p2 === "scissors") ||
-      (p1 === "scissors" && p2 === "paper") ||
-      (p1 === "paper" && p2 === "stone")
-    ) {
-      return player1;
-    }
-
-    return player2;
+    const winsAgainst = { stone: "scissors", scissors: "paper", paper: "stone" };
+    return winsAgainst[p1] === p2 ? player1 : player2;
   };
 
   const resolveRound = async () => {
     const winner = getWinner(p1Choice, p2Choice);
+    const newScore1 = score1 + (winner === player1 ? 1 : 0);
+    const newScore2 = score2 + (winner === player2 ? 1 : 0);
 
-    let newS1 = score1;
-    let newS2 = score2;
-
-    if (winner === player1) newS1++;
-    if (winner === player2) newS2++;
-
-    setScore1(newS1);
-    setScore2(newS2);
-    setRoundWinner(winner);
-
-    const newEntry = {
-      round,
-      p1Choice,
-      p2Choice,
-      winner,
-    };
-
-    setHistory((prev) => [...prev, newEntry]);
+    dispatch({ type: "RESOLVE_ROUND", payload: { winner, newScore1, newScore2 } });
 
     if (round === 6) {
       const finalWinner =
-        newS1 > newS2 ? player1 : newS2 > newS1 ? player2 : "Tie";
+        newScore1 > newScore2 ? player1 : newScore2 > newScore1 ? player2 : "Tie";
 
       try {
         await axios.post("https://sps-backend-cmzm.onrender.com/api/games", {
           player1,
           player2,
-          score: `${newS1}-${newS2}`,
+          score: `${newScore1}-${newScore2}`,
           winner: finalWinner,
         });
-
         alert("Game Saved Successfully");
       } catch (err) {
-        console.log(err);
+        console.error(err);
       }
 
-      setTimeout(() => restartGame(), 2500);
+      setTimeout(() => dispatch({ type: "RESTART" }), 2500);
       return;
     }
 
-    setTimeout(() => {
-      setRound((r) => r + 1);
-      resetRound();
-    }, 1500);
-  };
-
-  const resetRound = () => {
-    setP1Choice(null);
-    setP2Choice(null);
-    setP1Locked(false);
-    setP2Locked(false);
-    setRoundWinner(null);
-  };
-
-  const restartGame = () => {
-    setRound(1);
-    setScore1(0);
-    setScore2(0);
-    setHistory([]);
-    resetRound();
+    setTimeout(() => dispatch({ type: "NEXT_ROUND" }), 1500);
   };
 
   return (
@@ -114,25 +129,23 @@ export default function Game({ player1, player2 }) {
 
       {/* PLAY AREA */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-6 sm:mt-8">
-
         <PlayerCard
           name={player1}
           choice={p1Choice}
-          setChoice={setP1Choice}
+          onChoose={(c) => dispatch({ type: "SET_P1_CHOICE", payload: c })}
           locked={p1Locked}
-          setLocked={setP1Locked}
+          onLock={() => dispatch({ type: "LOCK_P1" })}
         />
-
         <PlayerCard
           name={player2}
           choice={p2Choice}
-          setChoice={setP2Choice}
+          onChoose={(c) => dispatch({ type: "SET_P2_CHOICE", payload: c })}
           locked={p2Locked}
-          setLocked={setP2Locked}
+          onLock={() => dispatch({ type: "LOCK_P2" })}
         />
       </div>
 
-      {/* RESULT */}
+      {/* ROUND RESULT */}
       {roundWinner && (
         <div className="text-center mt-5 text-green-400 text-lg sm:text-xl">
           Round Winner: {roundWinner}
@@ -144,10 +157,9 @@ export default function Game({ player1, player2 }) {
         <h2 className="flex items-center gap-2 mb-3 text-sm sm:text-base">
           <Trophy /> History
         </h2>
-
         {history.map((h, i) => (
           <div key={i} className="text-xs sm:text-sm text-gray-300">
-            Round {h.round}: {h.winner}
+            Round {h.round}: {h.p1Choice} vs {h.p2Choice} — {h.winner}
           </div>
         ))}
       </div>
@@ -155,13 +167,12 @@ export default function Game({ player1, player2 }) {
   );
 }
 
-/* PLAYER CARD */
-function PlayerCard({ name, choice, setChoice, locked, setLocked }) {
+// ─── PlayerCard ───────────────────────────────────────────────────────────────
+function PlayerCard({ name, choice, onChoose, locked, onLock }) {
   const options = ["stone", "paper", "scissors"];
 
   return (
     <div className="bg-[#0b0f2a] p-4 sm:p-5 rounded-xl">
-
       <h2 className="mb-3 sm:mb-4 font-bold text-sm sm:text-base">{name}</h2>
 
       <div className="grid grid-cols-3 gap-2 sm:gap-3">
@@ -169,7 +180,7 @@ function PlayerCard({ name, choice, setChoice, locked, setLocked }) {
           <button
             key={o}
             disabled={locked}
-            onClick={() => setChoice(o)}
+            onClick={() => onChoose(o)}
             className={`p-2 sm:p-3 text-xs sm:text-sm rounded border transition ${
               choice === o ? "border-yellow-400" : "border-gray-600"
             }`}
@@ -180,7 +191,7 @@ function PlayerCard({ name, choice, setChoice, locked, setLocked }) {
       </div>
 
       <button
-        onClick={() => setLocked(true)}
+        onClick={onLock}
         disabled={!choice || locked}
         className="mt-3 sm:mt-4 w-full flex items-center justify-center gap-2 border p-2 rounded text-xs sm:text-sm"
       >
