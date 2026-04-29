@@ -17,7 +17,7 @@ const pool = new Pool({
   database: process.env.PG_DATABASE, // e.g. sps_db
   user: process.env.PG_USER,
   password: process.env.PG_PASSWORD,
-  ssl: { rejectUnauthorized: true }, // Required for AWS RDS
+  ssl: { rejectUnauthorized: false }, // Required for AWS RDS
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
