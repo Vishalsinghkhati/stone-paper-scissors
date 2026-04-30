@@ -99,7 +99,7 @@ export default function Game({ player1, player2 }) {
         newScore1 > newScore2 ? player1 : newScore2 > newScore1 ? player2 : "Tie";
 
       try {
-        await axios.post("https://sps-backend-cmzm.onrender.com/api/games", {
+        await axios.post("http://13.232.198.148:5000/api/games", {
           player1,
           player2,
           score: `${newScore1}-${newScore2}`,

@@ -34,7 +34,7 @@ export default function HistoryPage() {
   const fetchGames = async () => {
     dispatch({ type: "FETCH_START" });
     try {
-      const res = await axios.get("https://sps-backend-cmzm.onrender.com/api/games");
+      const res = await axios.get("http://13.232.198.148:5000/api/games")
       dispatch({ type: "FETCH_SUCCESS", payload: res.data });
     } catch {
       dispatch({
